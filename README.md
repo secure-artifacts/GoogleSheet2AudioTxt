@@ -431,7 +431,7 @@ Google Drive 文件列：U
 运行程序：
 
 ```bash
-python XL-GoogleSheet2Audio_Txt.py
+python GoogleSheet2AudioTxt.py
 ```
 
 打开软件界面后，按顺序填写信息。
