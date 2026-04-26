@@ -1,0 +1,4 @@
+PySide6
+requests
+google-auth
+google-api-python-client
