@@ -13,7 +13,7 @@ permissions:
 
 env:
   APP_NAME: AutoSheetMediaBuilder
-  ENTRY_SCRIPT: XL-GoogleSheet2Audio_Txt.py
+  ENTRY_SCRIPT: GoogleSheet2AudioTxt.py
 
 jobs:
   build:
