@@ -5,6 +5,11 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "手动运行时使用的 Release Tag，例如 v1.0.0。如果留空，会自动使用 manual-build-运行编号。"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -12,7 +17,7 @@ permissions:
   attestations: write
 
 env:
-  APP_NAME: AutoSheetMediaBuilder
+  APP_NAME: GoogleSheet2AudioTxt
   ENTRY_SCRIPT: GoogleSheet2AudioTxt.py
 
 jobs:
@@ -26,40 +31,62 @@ jobs:
         include:
           - name: Windows
             os: windows-latest
-            artifact_name: AutoSheetMediaBuilder-Windows
-            output_name: AutoSheetMediaBuilder.exe
-            pyinstaller_args: --onefile --windowed --name AutoSheetMediaBuilder
-            dist_path: dist/AutoSheetMediaBuilder.exe
+            artifact_name: GoogleSheet2AudioTxt-Windows
+            output_name: GoogleSheet2AudioTxt.exe
+            pyinstaller_args: --onefile --windowed --name GoogleSheet2AudioTxt
+            dist_path: dist/GoogleSheet2AudioTxt.exe
 
           - name: macOS
             os: macos-latest
-            artifact_name: AutoSheetMediaBuilder-macOS
-            output_name: AutoSheetMediaBuilder-macOS
-            pyinstaller_args: --onefile --windowed --name AutoSheetMediaBuilder
-            dist_path: dist/AutoSheetMediaBuilder
+            artifact_name: GoogleSheet2AudioTxt-macOS
+            output_name: GoogleSheet2AudioTxt-macOS
+            pyinstaller_args: --onefile --windowed --name GoogleSheet2AudioTxt
+            dist_path: dist/GoogleSheet2AudioTxt
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Check project files
+        shell: bash
+        run: |
+          echo "Current directory:"
+          pwd
+          echo "Files:"
+          ls -la
+
+          if [ ! -f "${{ env.ENTRY_SCRIPT }}" ]; then
+            echo "ERROR: Entry script not found: ${{ env.ENTRY_SCRIPT }}"
+            exit 1
+          fi
+
+          if [ ! -f "requirements.txt" ]; then
+            echo "ERROR: requirements.txt not found"
+            exit 1
+          fi
+
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
 
       - name: Install Python dependencies
+        shell: bash
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
 
       - name: Build executable with PyInstaller
+        shell: bash
         run: |
-          pyinstaller ${{ matrix.pyinstaller_args }} ${{ env.ENTRY_SCRIPT }}
+          pyinstaller ${{ matrix.pyinstaller_args }} "${{ env.ENTRY_SCRIPT }}"
+          ls -la dist
 
       - name: Rename macOS executable
         if: runner.os == 'macOS'
+        shell: bash
         run: |
           mv "${{ matrix.dist_path }}" "dist/${{ matrix.output_name }}"
 
@@ -74,7 +101,7 @@ jobs:
           fi
 
       - name: Generate build provenance attestation
-        uses: actions/attest@v4
+        uses: actions/attest-build-provenance@v2
         with:
           subject-path: |
             dist/${{ matrix.output_name }}
@@ -98,18 +125,34 @@ jobs:
       contents: write
 
     steps:
+      - name: Decide release tag
+        id: release_tag
+        shell: bash
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            echo "tag=${{ github.event.inputs.release_tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=manual-build-${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Download all build artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v4
         with:
           path: release-assets
 
       - name: Show release assets
+        shell: bash
         run: |
-          find release-assets -type f -maxdepth 3
+          find release-assets -maxdepth 3 -type f
 
       - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.release_tag.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: Release ${{ steps.release_tag.outputs.tag }}
           files: |
             release-assets/**/*
           generate_release_notes: true
